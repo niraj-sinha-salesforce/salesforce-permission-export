@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SF Permission Export</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+      --blue:    #0176d3;
+      --blue-dk: #014486;
+      --green:   #2e844a;
+      --red:     #ba0517;
+      --amber:   #dd7a01;
+      --purple:  #5c4ab7;
+      --surface: #f3f3f3;
+      --border:  #dddbda;
+      --text:    #181818;
+      --muted:   #706e6b;
+      --white:   #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      max-width: 1280px;
+      margin: 0 auto;
+      background: var(--white);
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    /* Header */
+    .header { background: var(--blue-dk); padding: 14px 16px 12px; display: flex; align-items: center; gap: 10px; }
+    .header-logo { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .header-title { color: var(--white); font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+    .header-sub { color: rgba(255,255,255,0.6); font-size: 12px; margin-top: 1px; font-family: 'IBM Plex Mono', monospace; display: flex; align-items: center; gap: 6px; }
+
+    /* Env badge */
+    .env-badge { display: none; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 99px; letter-spacing: .06em; text-transform: uppercase; }
+    .env-badge.visible { display: inline-block; }
+    .env-badge.prod    { background: #1d7a4a; color: #d4edda; }
+    .env-badge.sandbox { background: #dd7a01; color: #fff3cd; }
+    .env-badge.dev     { background: #5c4ab7; color: #ede9ff; }
+    .env-badge.scratch { background: #ba0517; color: #fde8e8; }
+
+    /* Status Bar */
+    .status-bar { display: flex; align-items: center; gap: 8px; padding: 9px 16px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 13px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.3s; }
+    .status-dot.active  { background: var(--green); box-shadow: 0 0 0 2px #d4edda; }
+    .status-dot.error   { background: var(--red);   box-shadow: 0 0 0 2px #fde8e8; }
+    .status-dot.loading { background: var(--amber); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .status-text { color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+
+    /* Body */
+    .body { padding: 20px 24px; }
+    .state-panel { display: none; flex-direction: column; gap: 12px; }
+    .state-panel.visible { display: flex; }
+    .warn-card { background: #fff8ed; border: 1px solid #f9c56d; border-radius: 6px; padding: 12px 14px; font-size: 13px; color: #7d4802; line-height: 1.5; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    .section-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+    /* Filter pills */
+    .filter-pills { display: flex; gap: 6px; margin-bottom: 10px; }
+    .pill { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--white); color: var(--muted); cursor: pointer; transition: all 0.15s; }
+    .pill:hover { border-color: var(--blue); color: var(--blue); }
+    .pill.active { background: var(--blue); border-color: var(--blue); color: var(--white); }
+
+    /* Search picker */
+    .search-wrap { position: relative; margin-bottom: 4px; }
+    .search-input-row { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--border); border-radius: 6px; padding: 0 10px; background: var(--white); transition: border-color .2s; }
+    .search-input-row:focus-within { border-color: var(--blue); }
+    .search-icon { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+    .search-input-row input { flex: 1; border: none; outline: none; padding: 9px 0; font-family: 'IBM Plex Sans', sans-serif; font-size: 15px; color: var(--text); background: transparent; }
+    .search-input-row input::placeholder { color: #c9c7c5; }
+    .search-clear { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 14px; padding: 2px 4px; border-radius: 3px; display: none; }
+    .search-clear.visible { display: block; }
+    .search-clear:hover { background: var(--surface); }
+
+    /* Search hint */
+    .search-hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; margin-top: 5px; display: none; }
+    .search-hint.visible { display: block; }
+
+    .search-dropdown { display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--white); border: 1.5px solid var(--border); border-radius: 6px; max-height: 240px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .search-dropdown.open { display: block; }
+    .search-result { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--surface); display: flex; align-items: center; gap: 10px; }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover, .search-result.highlighted { background: #f0f7ff; }
+    .result-icon { font-size: 14px; flex-shrink: 0; }
+    .result-info { flex: 1; min-width: 0; }
+    .result-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-name mark { background: #fff3cd; border-radius: 2px; padding: 0 1px; font-weight: 600; color: var(--text); }
+    .result-meta { font-size: 11px; color: var(--muted); margin-top: 1px; font-family: 'IBM Plex Mono', monospace; }
+    .result-badge { font-size: 10px; padding: 2px 6px; border-radius: 99px; flex-shrink: 0; }
+    .badge-profile { background: #eef5fb; color: var(--blue); border: 1px solid #c9dff8; }
+    .badge-permset  { background: #f3f0ff; color: var(--purple); border: 1px solid #d4cbf7; }
+    .search-empty { padding: 16px 12px; font-size: 13px; color: var(--muted); text-align: center; line-height: 1.6; }
+    .search-loading { padding: 12px; text-align: center; font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+
+    /* Dropdown footer */
+    .dropdown-footer { padding: 7px 12px; font-size: 11px; color: var(--muted); background: var(--surface); border-top: 1px solid var(--border); font-family: 'IBM Plex Mono', monospace; text-align: center; position: sticky; bottom: 0; }
+
+    /* Selected chip */
+    .selected-chip { display: none; align-items: center; gap: 8px; background: #eef5fb; border: 1px solid #c9dff8; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; }
+    .selected-chip.visible { display: flex; }
+    .chip-icon { font-size: 16px; flex-shrink: 0; }
+    .chip-info { flex: 1; }
+    .chip-type { font-size: 11px; font-weight: 600; color: var(--blue); text-transform: uppercase; letter-spacing: .06em; }
+    .chip-name { font-size: 15px; font-weight: 600; color: var(--text); margin-top: 1px; }
+    .chip-id   { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .chip-clear { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 2px 4px; border-radius: 3px; }
+    .chip-clear:hover { background: #d4e9f7; }
+
+    /* Buttons */
+    .btn { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 8px 14px; border: none; border-radius: 5px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: var(--blue); color: var(--white); }
+    .btn-primary:hover:not(:disabled) { background: var(--blue-dk); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-diff { background: var(--purple); color: var(--white); }
+    .btn-diff:hover:not(:disabled) { background: #4a3a9e; }
+    .btn-diff:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sm { font-size: 12px; padding: 4px 9px; width: auto; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { background: var(--surface); border-color: var(--blue); color: var(--blue); }
+    .btn-ghost-purple { background: transparent; border: 1px solid #d4cbf7; color: var(--purple); }
+    .btn-ghost-purple:hover { background: #f3f0ff; }
+
+    /* Step-by-step progress */
+    .progress-wrap { display: none; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .progress-wrap.visible { display: flex; }
+    .progress-header { padding: 10px 14px 8px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .progress-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .progress-subtitle { font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+    .progress-bar-bg { height: 3px; background: var(--border); }
+    .progress-bar-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.5s ease; }
+    .steps-list { padding: 8px 14px; display: flex; flex-direction: column; gap: 2px; }
+    .step-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .step-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background .3s; }
+    .step-dot.pending { background: var(--border); }
+    .step-dot.active  { background: var(--blue); box-shadow: 0 0 0 2px #c7e0f9; }
+    .step-dot.done    { background: var(--green); }
+    .step-dot.error   { background: var(--red); }
+    .step-name { font-size: 13px; flex: 1; }
+    .step-name.pending { color: var(--muted); }
+    .step-name.active  { color: var(--blue); font-weight: 600; }
+    .step-name.done    { color: var(--text); }
+    .step-count { font-size: 12px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); text-align: right; min-width: 80px; }
+    .step-count.done { color: var(--green); }
+
+    /* Rich result card */
+    .result-card { display: none; border: 1px solid #91d6a0; border-radius: 8px; overflow: hidden; }
+    .result-card.visible { display: block; }
+    .result-header { background: #f0faf3; padding: 10px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; border-bottom: 1px solid #c3e6cb; }
+    .result-header-left { flex: 1; min-width: 0; }
+    .result-title { font-size: 13px; font-weight: 600; color: var(--green); }
+    .result-filename { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-actions { display: flex; gap: 6px; flex-shrink: 0; margin-top: 2px; }
+    .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: #c3e6cb; }
+    .result-stat { background: var(--white); padding: 10px 12px; text-align: center; }
+    .result-stat .num { font-size: 18px; font-weight: 600; color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+    .result-stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+    .result-stat .sub { font-size: 11px; color: var(--green); margin-top: 1px; }
+
+    /* Error card */
+    .error-card { display: none; border-radius: 6px; overflow: hidden; }
+    .error-card.visible { display: block; }
+    .error-body { background: #fff0f0; border: 1px solid #f5a8a8; border-radius: 6px; padding: 10px 12px; font-size: 13px; color: var(--red); font-family: 'IBM Plex Mono', monospace; line-height: 1.5; }
+    .error-hint { font-size: 12px; color: var(--muted); font-family: 'IBM Plex Sans', sans-serif; margin-top: 6px; padding-top: 6px; border-top: 1px solid #f5a8a8; }
+
+
+    /* Diff record labels */
+    .diff-record-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; margin-top: 4px; }
+
+
+    /* Multi-ZIP file list */
+    .zip-file-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+    .zip-file-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-radius: 5px; padding: 6px 10px; font-size: 12px; }
+    .zip-file-name { font-family: 'IBM Plex Mono', monospace; color: var(--text); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .zip-file-size { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; margin: 0 10px; }
+    .zip-file-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer; color: var(--blue); white-space: nowrap; flex-shrink: 0; }
+    .zip-file-btn:hover { background: #eef5fb; }
+    /* Export All warning banner */
+    .export-all-banner { display: none; background: #fff8ed; border: 1px solid #f9c56d; border-radius: 8px; padding: 12px 14px; }
+    .export-all-banner.visible { display: block; }
+    .export-all-banner-title { font-size: 13px; font-weight: 600; color: #7d4802; margin-bottom: 6px; }
+    .export-all-banner-body { font-size: 12px; color: #7d4802; line-height: 1.6; }
+    .export-all-stats { display: flex; gap: 16px; margin: 10px 0 6px; }
+    .export-all-stat { text-align: center; flex: 1; background: rgba(255,255,255,0.6); border-radius: 6px; padding: 6px 0; }
+    .export-all-stat .num { font-size: 22px; font-weight: 700; color: #7d4802; font-family: 'IBM Plex Mono', monospace; }
+    .export-all-stat .lbl { font-size: 10px; color: #a0620a; text-transform: uppercase; letter-spacing: .05em; margin-top: 1px; }
+    .export-all-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+    /* Elapsed timer */
+    .batch-elapsed { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); text-align: right; padding: 4px 14px 6px; background: var(--surface); border-top: 1px solid var(--border); }
+
+    /* Speed stat row */
+    .batch-speed-row { display: flex; gap: 1px; background: var(--border); border-top: 1px solid var(--border); }
+    .batch-speed-cell { flex: 1; background: var(--white); padding: 7px 10px; text-align: center; font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
+    .batch-speed-cell strong { display: block; font-size: 14px; color: var(--text); font-weight: 600; }
+
+    /* Section divider inside batch body */
+    .batch-divider { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .batch-divider-line { flex: 1; border-top: 1px solid var(--border); }
+    .batch-divider-text { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 600; white-space: nowrap; }
+
+    /* ── Two-column accordion layout ── */
+    .panels-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .panel-col { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+
+    /* Each accordion fills its column */
+    .panel-col .diff-accordion { width: 100%; }
+
+    /* When an accordion is open its diff-body should still be contained within the column */
+    .panel-col .diff-body { min-width: 0; }
+
+    /* Dropdowns must not overflow the column — clamp to viewport */
+    .panel-col .search-dropdown { max-width: 100%; }
+
+    /* Result/progress cards inside compare panel sit full-width of that column */
+    .panel-col .progress-wrap,
+    .panel-col .result-card,
+    .panel-col .error-card { width: 100%; }
+
+    /* Batch progress rows scroll inside column */
+    .panel-col .batch-rows { max-height: 260px; }
+
+    /* Status bar wider */
+    .status-bar { padding: 9px 24px; }
+
+    /* Header padding matches body */
+    .header { padding: 16px 24px 14px; }
+
+    /* Diff accordion */
+    .diff-accordion { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .diff-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 14px; background: var(--surface); border: none; cursor: pointer; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; color: var(--text); text-align: left; transition: background 0.15s; }
+    .diff-toggle:hover { background: #ebebeb; }
+    .diff-toggle-chevron { margin-left: auto; font-size: 10px; color: var(--muted); transition: transform 0.2s; display: inline-block; }
+    .diff-toggle.open .diff-toggle-chevron { transform: rotate(180deg); }
+    .diff-body { display: none; padding: 14px; border-top: 1px solid var(--border); background: var(--white); flex-direction: column; gap: 10px; }
+    .diff-body.open { display: flex; }
+    .diff-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    /* ── Batch export ── */
+    .batch-chip-list { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
+    .batch-chip-list:empty::after { content: 'No profiles / permission sets selected yet'; font-size: 12px; color: var(--muted); padding: 4px 0; }
+    .batch-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef5fb; border: 1px solid #c9dff8; border-radius: 99px; padding: 3px 8px 3px 10px; font-size: 12px; font-weight: 500; color: var(--text); max-width: 220px; }
+    .batch-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .batch-chip-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 0 1px; line-height: 1; border-radius: 99px; flex-shrink: 0; }
+    .batch-chip-remove:hover { background: #d4e9f7; color: var(--red); }
+    .batch-actions { display: flex; gap: 8px; }
+    .batch-actions .btn { flex: 1; }
+    .batch-count { font-size: 12px; color: var(--muted); text-align: center; margin-top: -4px; }
+
+    /* Batch progress */
+    .batch-progress-wrap { display: none; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .batch-progress-wrap.visible { display: flex; }
+    .batch-overall { padding: 10px 14px 8px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .batch-overall-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .batch-overall-sub { font-size: 12px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+    .batch-bar-bg { height: 4px; background: var(--border); }
+    .batch-bar-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.4s ease; }
+    .batch-rows { padding: 6px 14px 8px; display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; }
+    .batch-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+    .batch-row-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .batch-row-dot.pending { background: var(--border); }
+    .batch-row-dot.running { background: var(--blue); box-shadow: 0 0 0 2px #c7e0f9; animation: pulse 1s infinite; }
+    .batch-row-dot.done    { background: var(--green); }
+    .batch-row-dot.error   { background: var(--red); }
+    .batch-row-name { flex: 1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .batch-row-name.running { color: var(--blue); font-weight: 600; }
+    .batch-row-name.done    { color: var(--text); }
+    .batch-row-status { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); flex-shrink: 0; }
+    .batch-row-status.done  { color: var(--green); }
+    .batch-row-status.error { color: var(--red); }
+
+    /* Batch result */
+    .batch-result { display: none; border: 1px solid #91d6a0; border-radius: 8px; overflow: hidden; }
+    .batch-result.visible { display: block; }
+    .batch-result-header { background: #f0faf3; padding: 10px 14px; border-bottom: 1px solid #c3e6cb; display: flex; align-items: center; justify-content: space-between; }
+    .batch-result-title { font-size: 13px; font-weight: 600; color: var(--green); }
+    .batch-result-sub { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+    .batch-stat-row { display: flex; gap: 1px; background: #c3e6cb; }
+    .batch-stat { flex: 1; background: var(--white); padding: 9px 12px; text-align: center; }
+    .batch-stat .num { font-size: 20px; font-weight: 600; color: var(--text); font-family: 'IBM Plex Mono', monospace; }
+    .batch-stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+    .batch-errors { padding: 8px 14px; background: #fff0f0; border-top: 1px solid #f5a8a8; font-size: 12px; color: var(--red); display: none; }
+    .batch-errors.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-logo">☁</div>
+    <div>
+      <div class="header-title">SF Permission Export</div>
+      <div class="header-sub">
+        <span id="headerSubText">Profile &amp; Permission Set → Excel</span>
+        <span class="env-badge" id="envBadge"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-dot loading" id="statusDot"></div>
+    <span class="status-text" id="statusText">Checking Salesforce session…</span>
+  </div>
+
+  <div class="body">
+
+    <div class="state-panel" id="panelNotSF">
+      <div class="warn-card"><strong>⚠ Not on Salesforce</strong><br>Navigate to a Salesforce org and open a Profile or Permission Set page, then click the extension icon again.</div>
+    </div>
+
+    <div class="state-panel" id="panelNoSession">
+      <div class="warn-card"><strong>🔒 Session inactive</strong><br>You appear to be logged out. Please log in to Salesforce and try again.</div>
+    </div>
+
+    <div class="state-panel" id="panelReady">
+
+      <!-- Two-column layout: Compare | Extract -->
+      <div class="panels-row">
+
+        <!-- Left column: Compare -->
+        <div class="panel-col">
+        <div class="diff-accordion">
+        <button class="diff-toggle" id="diffToggle">
+          <span>⇄</span>
+          <span>Compare profiles / permission sets</span>
+          <span class="diff-toggle-chevron" id="diffChevron">▼</span>
+        </button>
+        <div class="diff-body" id="diffBody">
+          <div class="diff-hint">Select two profiles or permission sets to export a side-by-side diff across all permission types.</div>
+
+          <!-- Record A -->
+          <div class="diff-record-label">First profile / permission set</div>
+          <div class="selected-chip" id="chipA">
+            <div class="chip-icon" id="chipIconA">👤</div>
+            <div class="chip-info">
+              <div class="chip-type" id="chipTypeA">Profile</div>
+              <div class="chip-name" id="chipNameA">—</div>
+              <div class="chip-id"   id="chipIdA">—</div>
+            </div>
+            <button class="chip-clear" id="chipClearA" title="Clear">✕</button>
+          </div>
+          <div class="search-wrap" id="searchWrapA">
+            <div class="search-input-row">
+              <span class="search-icon">⌕</span>
+              <input type="text" id="searchA" placeholder="Search profiles &amp; permission sets…" autocomplete="off" />
+              <button class="search-clear" id="searchClearA">✕</button>
+            </div>
+            <div class="search-dropdown" id="dropdownA"></div>
+          </div>
+          <input type="hidden" id="inputRecordId" />
+          <input type="hidden" id="inputType" value="Profile" />
+
+          <!-- Record B -->
+          <div class="diff-record-label">Second profile / permission set (for diff)</div>
+          <div class="selected-chip" id="chipB">
+            <div class="chip-icon" id="chipIconB">👤</div>
+            <div class="chip-info">
+              <div class="chip-type" id="chipTypeB">Profile</div>
+              <div class="chip-name" id="chipNameB">—</div>
+              <div class="chip-id"   id="chipIdB">—</div>
+            </div>
+            <button class="chip-clear" id="chipClearB" title="Clear">✕</button>
+          </div>
+
+          <!-- Search box B -->
+          <div class="search-wrap" id="searchWrapB">
+            <div class="search-input-row">
+              <span class="search-icon">⌕</span>
+              <input type="text" id="searchB" placeholder="Search profiles &amp; permission sets…" autocomplete="off" />
+              <button class="search-clear" id="searchClearB">✕</button>
+            </div>
+            <div class="search-dropdown" id="dropdownB"></div>
+          </div>
+
+          <input type="hidden" id="inputRecordIdB" />
+          <input type="hidden" id="inputTypeB" value="Profile" />
+
+          <button class="btn btn-diff" id="btnDiff" disabled>
+            <span>⇄</span> Export Diff to Excel
+          </button>
+
+          <!-- Progress -->
+          <div class="progress-wrap" id="progressWrap">
+            <div class="progress-header">
+              <div class="progress-title" id="progressTitle">Exporting…</div>
+              <div class="progress-subtitle" id="progressSubtitle">Starting up</div>
+            </div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+            <div class="steps-list" id="stepsList">
+              <div class="step-row" id="step-meta"><div class="step-dot pending" id="dot-meta"></div><div class="step-name pending" id="name-meta">Resolving record</div><div class="step-count" id="count-meta"></div></div>
+              <div class="step-row" id="step-field"><div class="step-dot pending" id="dot-field"></div><div class="step-name pending" id="name-field">Field permissions</div><div class="step-count" id="count-field"></div></div>
+              <div class="step-row" id="step-object"><div class="step-dot pending" id="dot-object"></div><div class="step-name pending" id="name-object">Object permissions</div><div class="step-count" id="count-object"></div></div>
+              <div class="step-row" id="step-apex"><div class="step-dot pending" id="dot-apex"></div><div class="step-name pending" id="name-apex">Apex class access</div><div class="step-count" id="count-apex"></div></div>
+              <div class="step-row" id="step-vf"><div class="step-dot pending" id="dot-vf"></div><div class="step-name pending" id="name-vf">VF page access</div><div class="step-count" id="count-vf"></div></div>
+              <div class="step-row" id="step-sys"><div class="step-dot pending" id="dot-sys"></div><div class="step-name pending" id="name-sys">System permissions</div><div class="step-count" id="count-sys"></div></div>
+              <div class="step-row" id="step-excel"><div class="step-dot pending" id="dot-excel"></div><div class="step-name pending" id="name-excel">Building Excel file</div><div class="step-count" id="count-excel"></div></div>
+            </div>
+          </div>
+
+          <!-- Result card -->
+          <div class="result-card" id="resultCard">
+            <div class="result-header">
+              <div class="result-header-left">
+                <div class="result-title">✓ Export complete</div>
+                <div class="result-filename" id="resultFilename"></div>
+              </div>
+              <div class="result-actions">
+                <button class="btn btn-sm btn-ghost" id="btnRedownload">↓ Download again</button>
+                <button class="btn btn-sm btn-ghost-purple" id="btnCompareThis">⇄ Compare this…</button>
+              </div>
+            </div>
+            <div class="result-grid">
+              <div class="result-stat"><div class="num" id="statFields">—</div><div class="lbl">Fields</div></div>
+              <div class="result-stat"><div class="num" id="statObjects">—</div><div class="lbl">Objects</div></div>
+              <div class="result-stat"><div class="num" id="statApex">—</div><div class="lbl">Apex classes</div></div>
+              <div class="result-stat"><div class="num" id="statVF">—</div><div class="lbl">VF pages</div></div>
+              <div class="result-stat"><div class="num" id="statSys">—</div><div class="lbl">System perms on</div><div class="sub" id="statSysSub"></div></div>
+              <div class="result-stat"><div class="num" id="statSheets">—</div><div class="lbl">Sheets</div></div>
+            </div>
+          </div>
+
+          <!-- Error card -->
+          <div class="error-card" id="errorCard">
+            <div class="error-body" id="errorMsg"></div>
+            <div class="error-hint" id="errorHint" style="display:none"></div>
+          </div>
+
+        </div>
+      </div>
+        </div><!-- /panel-col left -->
+
+        <!-- Right column: Extract -->
+        <div class="panel-col">
+      <div class="diff-accordion" id="batchAccordion">
+        <button class="diff-toggle" id="batchToggle">
+          <span>⬇</span>
+          <span>Extract multiple profiles / permission sets</span>
+          <span class="diff-toggle-chevron" id="batchChevron">▼</span>
+        </button>
+        <div class="diff-body" id="batchBody">
+          <div class="diff-hint">Export individual Excel files for multiple profiles / permission sets, all bundled into a single ZIP download.</div>
+
+          <!-- Export All banner (shown after records load) -->
+          <div class="export-all-banner" id="exportAllBanner">
+            <div class="export-all-banner-title">⚡ Export all profiles &amp; permission sets</div>
+            <div class="export-all-stats">
+              <div class="export-all-stat"><div class="num" id="exportAllProfiles">—</div><div class="lbl">Profiles</div></div>
+              <div class="export-all-stat"><div class="num" id="exportAllPermSets">—</div><div class="lbl">Perm Sets</div></div>
+              <div class="export-all-stat"><div class="num" id="exportAllTotal">—</div><div class="lbl">Total</div></div>
+              <div class="export-all-stat"><div class="num" id="exportAllEst">—</div><div class="lbl">Est. time</div></div>
+            </div>
+            <div class="export-all-banner-body" id="exportAllWarning"></div>
+            <div class="export-all-actions">
+              <button class="btn btn-primary" id="btnExportAll">
+                <span>⬇</span> Export All as ZIP
+              </button>
+            </div>
+          </div>
+
+          <!-- Manual selection section — hidden during Export All -->
+          <div id="manualSection">
+
+            <div class="batch-divider">
+              <div class="batch-divider-line"></div>
+              <div class="batch-divider-text">or select manually</div>
+              <div class="batch-divider-line"></div>
+            </div>
+
+            <!-- Batch search box -->
+            <div class="search-wrap" id="searchWrapBatch">
+              <div class="search-input-row">
+                <span class="search-icon">⌕</span>
+                <input type="text" id="searchBatch" placeholder="Search profiles &amp; permission sets to add…" autocomplete="off" />
+                <button class="search-clear" id="searchClearBatch">✕</button>
+              </div>
+              <div class="search-dropdown" id="dropdownBatch"></div>
+            </div>
+
+            <!-- Selected chips -->
+            <div class="batch-selection-wrap" id="batchSelectionWrap">
+              <div class="batch-chip-list" id="batchChipList"></div>
+              <div class="batch-count" id="batchCount">0 profiles / permission sets selected</div>
+            </div>
+
+            <!-- Actions -->
+            <div class="batch-actions">
+              <button class="btn btn-ghost btn-sm" id="btnBatchClear" style="width:auto">Clear all</button>
+              <button class="btn btn-primary" id="btnBatchExport" disabled>
+                <span>⬇</span> Export Selected as ZIP
+              </button>
+            </div>
+
+          </div><!-- /manualSection -->
+
+          <!-- Batch progress -->
+          <div class="batch-progress-wrap" id="batchProgressWrap">
+            <div class="batch-overall">
+              <div class="batch-overall-title" id="batchOverallTitle">Exporting batch…</div>
+              <div class="batch-overall-sub" id="batchOverallSub">Starting…</div>
+            </div>
+            <div class="batch-bar-bg"><div class="batch-bar-fill" id="batchBarFill"></div></div>
+            <div class="batch-rows" id="batchRows"></div>
+            <div class="batch-elapsed" id="batchElapsed"></div>
+          </div>
+
+          <!-- Batch result -->
+          <div class="batch-result" id="batchResult">
+            <div class="batch-result-header">
+              <div>
+                <div class="batch-result-title" id="batchResultTitle">✓ Batch export complete</div>
+                <div class="batch-result-sub" id="batchResultSub"></div>
+                <div class="zip-file-list" id="zipFileList"></div>
+              </div>
+              <button class="btn btn-sm btn-ghost" id="btnBatchRedownload">↓ Download again</button>
+            </div>
+            <div class="batch-stat-row">
+              <div class="batch-stat"><div class="num" id="batchStatOk">—</div><div class="lbl">Exported</div></div>
+              <div class="batch-stat"><div class="num" id="batchStatFail">—</div><div class="lbl">Failed</div></div>
+              <div class="batch-stat"><div class="num" id="batchStatFiles">—</div><div class="lbl">Files exported</div></div>
+            </div>
+            <div class="batch-speed-row" id="batchSpeedRow" style="display:none">
+              <div class="batch-speed-cell"><strong id="batchSpeedTime">—</strong>Total time</div>
+              <div class="batch-speed-cell"><strong id="batchSpeedRate">—</strong>Avg per record</div>
+              <div class="batch-speed-cell"><strong id="batchSpeedSize">—</strong>Total size</div>
+            </div>
+            <div class="batch-errors" id="batchErrors"></div>
+          </div>
+
+        </div>
+      </div>
+        </div><!-- /panel-col right -->
+
+      </div><!-- /panels-row -->
+
+    </div>
+  </div>
+
+  <script src="src/xlsx.full.min.js"></script>
+  <script src="src/jszip.min.js"></script>
+  <script src="src/popup.js"></script>
+</body>
+</html>

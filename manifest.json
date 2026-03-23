@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "Salesforce Permission Export",
+  "version": "1.9.1",
+  "description": "Export Salesforce Profile & Permission Set field-level access to Excel",
+  "permissions": [
+    "activeTab",
+    "cookies",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.salesforce.com/*",
+    "https://*.salesforce-setup.com/*",
+    "https://*.force.com/*",
+    "https://*.lightning.force.com/*",
+    "https://*.my.salesforce.com/*",
+    "https://*.sandbox.my.salesforce.com/*",
+    "https://*.develop.my.salesforce.com/*",
+    "https://*.scratch.my.salesforce.com/*",
+    "https://*.trailblaze.my.salesforce.com/*",
+    "https://*.vf.force.com/*",
+    "https://*.salesforce-sites.com/*",
+    "https://*.cloudforce.com/*"
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.salesforce-setup.com/*",
+        "https://*.force.com/*",
+        "https://*.lightning.force.com/*",
+        "https://*.my.salesforce.com/*",
+        "https://*.sandbox.my.salesforce.com/*",
+        "https://*.develop.my.salesforce.com/*",
+        "https://*.scratch.my.salesforce.com/*",
+        "https://*.trailblaze.my.salesforce.com/*",
+        "https://*.vf.force.com/*",
+        "https://*.salesforce-sites.com/*",
+        "https://*.cloudforce.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/xlsx.full.min.js",
+        "src/popup.js",
+        "popup.html",
+        "src/content.js",
+        "src/jszip.min.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
